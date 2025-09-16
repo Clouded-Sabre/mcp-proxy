@@ -3,7 +3,11 @@ package main
 import (
 	"crypto/tls"
 	"errors"
+	"fmt"
+	"log"
 	nethttp "net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -66,6 +70,8 @@ type OptionsV2 struct {
 	LogEnabled     optional.Field[bool] `json:"logEnabled,omitempty"`
 	AuthTokens     []string             `json:"authTokens,omitempty"`
 	ToolFilter     *ToolFilterConfig    `json:"toolFilter,omitempty"`
+	RegoPolicy     *string              `json:"regoPolicy,omitempty"`     // for policy based access control
+	RegoPolicyFile *string              `json:"regoPolicyFile,omitempty"` // path to external .rego file
 }
 
 type MCPProxyConfigV2 struct {
@@ -91,6 +97,53 @@ type MCPClientConfigV2 struct {
 	Timeout time.Duration     `json:"timeout,omitempty"`
 
 	Options *OptionsV2 `json:"options,omitempty"`
+}
+
+type PolicySource struct {
+	Policy     string
+	SourceFile string
+}
+
+func loadRegoPolicy(options *OptionsV2) (*PolicySource, error) {
+	if options == nil {
+		return nil, nil
+	}
+
+	// Check for inline policy first
+	if options.RegoPolicy != nil && *options.RegoPolicy != "" {
+		return &PolicySource{
+			Policy: *options.RegoPolicy,
+		}, nil
+	}
+
+	// Check for policy file
+	if options.RegoPolicyFile != nil && *options.RegoPolicyFile != "" {
+		policyPath := *options.RegoPolicyFile
+
+		// Handle both absolute and relative paths
+		if !filepath.IsAbs(policyPath) {
+			workDir, err := os.Getwd()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get working directory: %v", err)
+			}
+			policyPath = filepath.Join(workDir, policyPath)
+		}
+
+		// Read the policy file
+		policyBytes, err := os.ReadFile(policyPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read policy file %s: %v", policyPath, err)
+		}
+
+		// Store the raw policy content exactly as we would for inline policy
+		// No need to do any special formatting since both sources should be raw Rego
+		return &PolicySource{
+			Policy:     string(policyBytes),
+			SourceFile: policyPath,
+		}, nil
+	}
+
+	return nil, nil // No policy specified
 }
 
 func parseMCPClientConfigV2(conf *MCPClientConfigV2) (any, error) {
@@ -197,10 +250,30 @@ func load(path string, insecure, expandEnv bool, httpHeaders string, httpTimeout
 	if conf.McpProxy.Options == nil {
 		conf.McpProxy.Options = &OptionsV2{}
 	}
-	for _, clientConfig := range conf.McpServers {
+	for name, clientConfig := range conf.McpServers {
 		if clientConfig.Options == nil {
 			clientConfig.Options = &OptionsV2{}
 		}
+
+		// Load policy for this client
+		policy, err := loadRegoPolicy(clientConfig.Options)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load policy for client %s: %v", name, err)
+		}
+
+		// Store the loaded policy somewhere (you'll need to add a field to store it)
+		// For now we'll just log it
+		if policy != nil {
+			policyStr := policy.Policy
+			clientConfig.Options.RegoPolicy = &policyStr
+
+			if policy.SourceFile != "" {
+				log.Printf("Loaded policy for %s from file: %s", name, policy.SourceFile)
+			} else {
+				log.Printf("Loaded inline policy for %s", name)
+			}
+		}
+
 		if clientConfig.Options.AuthTokens == nil {
 			clientConfig.Options.AuthTokens = conf.McpProxy.Options.AuthTokens
 		}

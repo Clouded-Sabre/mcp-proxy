@@ -144,3 +144,6 @@ fabric.properties
 /build
 /dist
 config_prod.json
+
+# Virtual environment
+test/myvenv/
