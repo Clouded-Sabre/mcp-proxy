@@ -1,11 +1,21 @@
 import requests
 import json
 import uuid
+import argparse
+
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='MCP Test Client')
+parser.add_argument('--direct', action='store_true', 
+                    help='Connect directly to MCP server instead of through proxy')
+args = parser.parse_args()
 
 # Configuration
-# PROXY_URL = "http://192.168.139.146:3000"
-PROXY_URL = "http://localhost:9090/filesystem/"
+MCP_SERVER_URL = "http://192.168.139.146:3000"    # Direct to MCP server
+PROXY_URL = "http://localhost:9090/filesystem/"    # Through MCP proxy
 AUTH_TOKEN = "DefaultTokens" # Replace with the token from your config.json
+
+# Select URL based on --direct flag
+ACTIVE_URL = MCP_SERVER_URL if args.direct else PROXY_URL
 
 def send_mcp_call(method, arguments):
     """Sends an MCP request and prints the response."""
@@ -27,7 +37,8 @@ def send_mcp_call(method, arguments):
 
     print(f"Sending request for method: {method}")
     try:
-        response = requests.post(PROXY_URL, headers=headers, data=json.dumps(payload))
+        print(f"Connecting to: {ACTIVE_URL}")
+        response = requests.post(ACTIVE_URL, headers=headers, data=json.dumps(payload))
         response.raise_for_status()
         print(f"Response Status: {response.status_code}")
         try:
