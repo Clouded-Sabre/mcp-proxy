@@ -113,8 +113,6 @@ func startHTTPServer(config *Config) error {
 			}
 			log.Printf("<%s> Connected", name)
 
-			// Compile the Rego policy once at startup
-
 			middlewares := make([]MiddlewareFunc, 0)
 			middlewares = append(middlewares, recoverMiddleware(name))
 			if clientConfig.Options.LogEnabled.OrElse(false) {
@@ -124,11 +122,12 @@ func startHTTPServer(config *Config) error {
 				middlewares = append(middlewares, newAuthMiddleware(clientConfig.Options.AuthTokens))
 			}
 
-			// Insert the new ACL middleware if a policy was provided
+			// Compile the Rego policy once at startup
 			aclMiddleware, err := compileRegoPolicy(clientConfig, &ctx, name)
 			if err != nil {
 				log.Fatalf("<%s> Failed to compile Rego policy: %v", name, err)
 			}
+			// Insert the new ACL middleware if a policy was provided
 			if aclMiddleware != nil {
 				middlewares = append(middlewares, aclMiddleware)
 			}

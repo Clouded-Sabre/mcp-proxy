@@ -3,8 +3,8 @@ import json
 import uuid
 
 # Configuration
-PROXY_URL = "http://192.168.139.146:3000"
-# PROXY_URL = "http://localhost:9090/filesystem/"
+# PROXY_URL = "http://192.168.139.146:3000"
+PROXY_URL = "http://localhost:9090/filesystem/"
 AUTH_TOKEN = "DefaultTokens" # Replace with the token from your config.json
 
 def send_mcp_call(method, arguments):
